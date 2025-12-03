@@ -6,6 +6,8 @@ import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { toast } from '@/components/ui/use-toast';
 import Icon from '@/components/ui/icon';
+import CoinAnimation from '@/components/CoinAnimation';
+import { playWinSound, playJackpotSound, playBetSound, playLoseSound, playCashoutSound, playSpinSound } from '@/utils/sounds';
 
 interface LiveMatch {
   id: number;
@@ -48,6 +50,7 @@ const Index = () => {
   const [gameOpen, setGameOpen] = useState(false);
   const [activeGame, setActiveGame] = useState<GameCard | null>(null);
   const [slotSpinning, setSlotSpinning] = useState(false);
+  const [showCoinAnimation, setShowCoinAnimation] = useState(false);
   const [slotResult, setSlotResult] = useState(['🍒', '🍋', '🍊']);
   const [crashMultiplier, setCrashMultiplier] = useState(1.00);
   const [crashRunning, setCrashRunning] = useState(false);
@@ -153,11 +156,14 @@ const Index = () => {
       if (isWin) {
         const winAmount = amount * selectedBet.odds;
         setBalance(prev => prev + winAmount);
+        playWinSound();
+        setShowCoinAnimation(true);
         toast({ 
           title: "Выигрыш!", 
           description: `Вы выиграли ${winAmount.toFixed(2)} ₽` 
         });
       } else {
+        playLoseSound();
         toast({ 
           title: "Проигрыш", 
           description: "В следующий раз повезёт!",
@@ -168,6 +174,7 @@ const Index = () => {
 
     setBetSlipOpen(false);
     setBetAmount('');
+    playBetSound();
     toast({ title: "Ставка принята!" });
   };
 
@@ -194,6 +201,7 @@ const Index = () => {
 
     setBalance(balance - amount);
     setSlotSpinning(true);
+    playSpinSound();
 
     const symbols = ['🍒', '🍋', '🍊', '🍇', '⭐', '💎', '7️⃣'];
     let spins = 0;
@@ -218,6 +226,8 @@ const Index = () => {
         if (finalResult[0] === finalResult[1] && finalResult[1] === finalResult[2]) {
           const winAmount = amount * 10;
           setBalance(prev => prev + winAmount);
+          playJackpotSound();
+          setShowCoinAnimation(true);
           toast({ 
             title: "🎉 ДЖЕКПОТ!", 
             description: `Выигрыш: ${winAmount} ₽` 
@@ -225,11 +235,14 @@ const Index = () => {
         } else if (finalResult[0] === finalResult[1] || finalResult[1] === finalResult[2]) {
           const winAmount = amount * 3;
           setBalance(prev => prev + winAmount);
+          playWinSound();
+          setShowCoinAnimation(true);
           toast({ 
             title: "Выигрыш!", 
             description: `+${winAmount} ₽` 
           });
         } else {
+          playLoseSound();
           toast({ 
             title: "Почти получилось!", 
             variant: "destructive" 
@@ -262,6 +275,7 @@ const Index = () => {
           clearInterval(interval);
           setCrashRunning(false);
           if (!crashCashedOut) {
+            playLoseSound();
             toast({ 
               title: "💥 КРАХ!", 
               description: `Множитель достиг ${crashPoint.toFixed(2)}x`,
@@ -285,6 +299,8 @@ const Index = () => {
     const winAmount = amount * crashMultiplier;
     setBalance(prev => prev + winAmount);
     
+    playCashoutSound();
+    setShowCoinAnimation(true);
     toast({ 
       title: "✅ Вывод успешен!", 
       description: `Выигрыш: ${winAmount.toFixed(2)} ₽ (${crashMultiplier.toFixed(2)}x)` 
@@ -662,6 +678,8 @@ const Index = () => {
           )}
         </DialogContent>
       </Dialog>
+
+      <CoinAnimation show={showCoinAnimation} onComplete={() => setShowCoinAnimation(false)} />
     </div>
   );
 };
