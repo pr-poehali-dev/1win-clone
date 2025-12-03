@@ -1,0 +1,6 @@
+{
+  "deposit": "https://functions.poehali.dev/aa035a4f-acb4-48cb-acc2-5b1e87624710",
+  "withdraw": "https://functions.poehali.dev/70f4ce1f-5608-46e5-a0dd-e5f77b1f0945",
+  "auth": "https://functions.poehali.dev/57db90f5-1df4-45f5-9729-d1dc43cf9a14",
+  "game": "https://functions.poehali.dev/1299c880-8d99-433b-becd-1241bdd90f6d"
+}
