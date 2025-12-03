@@ -7,32 +7,20 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { toast } from '@/components/ui/use-toast';
 import Icon from '@/components/ui/icon';
 import CoinAnimation from '@/components/CoinAnimation';
-import { playWinSound, playJackpotSound, playBetSound, playLoseSound, playCashoutSound, playSpinSound } from '@/utils/sounds';
+import { playWinSound, playJackpotSound, playLoseSound, playCashoutSound, playSpinSound } from '@/utils/sounds';
 
 interface GameCard {
   id: number;
   title: string;
   provider: string;
   category: string;
-  type: 'slot' | 'crash' | 'card' | 'roulette' | 'live';
+  type: 'slot' | 'crash' | 'mines' | 'plinko' | 'dice';
   hot?: boolean;
-  new?: boolean;
-}
-
-interface Bet {
-  id: number;
-  match: string;
-  type: string;
-  odds: number;
-  amount: number;
-  timestamp: Date;
-  status: 'pending' | 'win' | 'lose';
 }
 
 const Index = () => {
-  const [balance, setBalance] = useState(50000);
-  const [activeCategory, setActiveCategory] = useState('popular');
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [balance, setBalance] = useState(100000);
+  const [activeCategory, setActiveCategory] = useState('all');
   const [gameOpen, setGameOpen] = useState(false);
   const [activeGame, setActiveGame] = useState<GameCard | null>(null);
   const [slotSpinning, setSlotSpinning] = useState(false);
@@ -42,83 +30,49 @@ const Index = () => {
   const [crashRunning, setCrashRunning] = useState(false);
   const [betAmount, setBetAmount] = useState('');
   const [crashCashedOut, setCrashCashedOut] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
 
   const allGames: GameCard[] = [
-    { id: 1, title: 'Sweet Bonanza', provider: 'Pragmatic Play', category: 'Слоты', type: 'slot', hot: true },
-    { id: 2, title: 'Gates of Olympus', provider: 'Pragmatic Play', category: 'Слоты', type: 'slot', hot: true },
-    { id: 3, title: 'Aviator', provider: 'Spribe', category: 'Краш', type: 'crash', hot: true },
-    { id: 4, title: 'Lucky Jet', provider: 'Gaming Corps', category: 'Краш', type: 'crash', new: true },
-    { id: 5, title: 'The Dog House', provider: 'Pragmatic Play', category: 'Слоты', type: 'slot' },
-    { id: 6, title: 'Sugar Rush', provider: 'Pragmatic Play', category: 'Слоты', type: 'slot', new: true },
-    { id: 7, title: 'Big Bass Bonanza', provider: 'Pragmatic Play', category: 'Слоты', type: 'slot' },
-    { id: 8, title: 'Book of Dead', provider: 'Play n GO', category: 'Слоты', type: 'slot' },
-    { id: 9, title: 'Crazy Time', provider: 'Evolution', category: 'Live казино', type: 'live', hot: true },
-    { id: 10, title: 'Lightning Roulette', provider: 'Evolution', category: 'Live казино', type: 'live' },
-    { id: 11, title: 'Monopoly Live', provider: 'Evolution', category: 'Live казино', type: 'live' },
-    { id: 12, title: 'Blackjack', provider: 'Evolution', category: 'Карты', type: 'card' },
-    { id: 13, title: 'Mega Ball', provider: 'Evolution', category: 'Live казино', type: 'live' },
-    { id: 14, title: 'Fruit Party', provider: 'Pragmatic Play', category: 'Слоты', type: 'slot' },
-    { id: 15, title: 'Starlight Princess', provider: 'Pragmatic Play', category: 'Слоты', type: 'slot', hot: true },
-    { id: 16, title: 'Fire Joker', provider: 'Play n GO', category: 'Слоты', type: 'slot' },
-    { id: 17, title: 'Reactoonz', provider: 'Play n GO', category: 'Слоты', type: 'slot' },
-    { id: 18, title: 'Moon Princess', provider: 'Play n GO', category: 'Слоты', type: 'slot' },
-    { id: 19, title: 'Jammin Jars', provider: 'Push Gaming', category: 'Слоты', type: 'slot' },
-    { id: 20, title: 'Wanted Dead', provider: 'Hacksaw Gaming', category: 'Слоты', type: 'slot', new: true },
-    { id: 21, title: 'Mines', provider: 'Spribe', category: 'Краш', type: 'crash' },
-    { id: 22, title: 'Plinko', provider: 'Spribe', category: 'Краш', type: 'crash' },
-    { id: 23, title: 'Dice', provider: 'Spribe', category: 'Краш', type: 'crash' },
-    { id: 24, title: 'European Roulette', provider: 'NetEnt', category: 'Рулетка', type: 'roulette' },
+    { id: 1, title: 'Crash', provider: 'Clubber', category: 'Оригинальные', type: 'crash', hot: true },
+    { id: 2, title: 'Mines', provider: 'Clubber', category: 'Оригинальные', type: 'mines', hot: true },
+    { id: 3, title: 'Plinko', provider: 'Clubber', category: 'Оригинальные', type: 'plinko' },
+    { id: 4, title: 'Dice', provider: 'Clubber', category: 'Оригинальные', type: 'dice' },
+    { id: 5, title: 'Limbo', provider: 'Clubber', category: 'Оригинальные', type: 'crash' },
+    { id: 6, title: 'Hilo', provider: 'Clubber', category: 'Оригинальные', type: 'slot' },
+    { id: 7, title: 'Keno', provider: 'Clubber', category: 'Оригинальные', type: 'slot' },
+    { id: 8, title: 'Tower', provider: 'Clubber', category: 'Оригинальные', type: 'slot' },
+    { id: 9, title: 'Wheel', provider: 'Clubber', category: 'Оригинальные', type: 'slot' },
+    { id: 10, title: 'Video Poker', provider: 'Clubber', category: 'Оригинальные', type: 'slot' },
+    { id: 11, title: 'Coinflip', provider: 'Clubber', category: 'Оригинальные', type: 'slot', hot: true },
+    { id: 12, title: 'Roulette', provider: 'Clubber', category: 'Оригинальные', type: 'slot' },
   ];
 
   const categories = [
-    { id: 'popular', icon: 'TrendingUp', label: 'Популярное', count: 24 },
-    { id: 'slots', icon: 'CircleDot', label: 'Слоты', count: 150 },
-    { id: 'live', icon: 'Video', label: 'Live казино', count: 45 },
-    { id: 'crash', icon: 'Rocket', label: 'Краш игры', count: 12 },
-    { id: 'jackpot', icon: 'Trophy', label: 'Джекпот', count: 8 },
-    { id: 'new', icon: 'Sparkles', label: 'Новые', count: 6 },
-    { id: 'table', icon: 'LayoutGrid', label: 'Настольные', count: 32 },
+    { id: 'all', label: 'Все игры', count: 12 },
+    { id: 'original', label: 'Оригинальные', count: 12 },
+    { id: 'hot', label: 'Популярные', count: 3 },
   ];
 
   const filteredGames = allGames.filter(game => {
-    if (searchQuery) {
-      return game.title.toLowerCase().includes(searchQuery.toLowerCase());
-    }
-    if (activeCategory === 'popular') return game.hot || game.new;
-    if (activeCategory === 'slots') return game.type === 'slot';
-    if (activeCategory === 'live') return game.type === 'live';
-    if (activeCategory === 'crash') return game.type === 'crash';
-    if (activeCategory === 'new') return game.new;
+    if (activeCategory === 'all') return true;
+    if (activeCategory === 'hot') return game.hot;
+    if (activeCategory === 'original') return game.category === 'Оригинальные';
     return true;
   });
 
   const getGameIcon = (game: GameCard) => {
     const icons: Record<string, string> = {
-      'Sweet Bonanza': '🍭',
-      'Gates of Olympus': '⚡',
-      'Aviator': '✈️',
-      'Lucky Jet': '🚀',
-      'The Dog House': '🐕',
-      'Sugar Rush': '🍬',
-      'Big Bass Bonanza': '🎣',
-      'Book of Dead': '📖',
-      'Crazy Time': '🎡',
-      'Lightning Roulette': '⚡',
-      'Monopoly Live': '🎲',
-      'Blackjack': '🃏',
-      'Mega Ball': '🔮',
-      'Fruit Party': '🍓',
-      'Starlight Princess': '👸',
-      'Fire Joker': '🃏',
-      'Reactoonz': '👾',
-      'Moon Princess': '🌙',
-      'Jammin Jars': '🍯',
-      'Wanted Dead': '🤠',
+      'Crash': '🚀',
       'Mines': '💣',
       'Plinko': '🎯',
       'Dice': '🎲',
-      'European Roulette': '🎰',
+      'Limbo': '🌊',
+      'Hilo': '🎴',
+      'Keno': '🔢',
+      'Tower': '🗼',
+      'Wheel': '🎡',
+      'Video Poker': '🃏',
+      'Coinflip': '🪙',
+      'Roulette': '🎰',
     };
     return icons[game.title] || '🎮';
   };
@@ -255,61 +209,43 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-50 bg-card border-b border-border">
-        <div className="px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-6">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="lg:hidden"
-            >
-              <Icon name="Menu" size={24} />
-            </Button>
-            
+      <header className="border-b border-border bg-card">
+        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-8">
             <div className="flex items-center gap-2">
-              <div className="text-2xl font-bold text-primary">1</div>
-              <div className="text-2xl font-bold text-secondary">WIN</div>
+              <div className="w-10 h-10 bg-gradient-to-br from-primary to-secondary rounded-lg flex items-center justify-center text-white font-bold text-xl">
+                C
+              </div>
+              <span className="text-2xl font-bold text-foreground">CLUBBER</span>
             </div>
 
-            <div className="hidden lg:flex items-center gap-1">
-              <Button variant="ghost" size="sm" className="text-sm">
-                <Icon name="Trophy" size={16} className="mr-2" />
-                Спорт
-              </Button>
-              <Button variant="ghost" size="sm" className="text-sm">
-                <Icon name="Radio" size={16} className="mr-2" />
-                Live
-              </Button>
-              <Button variant="default" size="sm" className="text-sm">
+            <nav className="hidden md:flex items-center gap-1">
+              <Button variant="default" size="sm">
                 <Icon name="Gamepad2" size={16} className="mr-2" />
                 Казино
               </Button>
-              <Button variant="ghost" size="sm" className="text-sm">
-                <Icon name="Tv" size={16} className="mr-2" />
-                Live казино
+              <Button variant="ghost" size="sm">
+                <Icon name="Trophy" size={16} className="mr-2" />
+                Спорт
               </Button>
-            </div>
+              <Button variant="ghost" size="sm">
+                <Icon name="Radio" size={16} className="mr-2" />
+                Live
+              </Button>
+              <Button variant="ghost" size="sm">
+                <Icon name="Gift" size={16} className="mr-2" />
+                Акции
+              </Button>
+            </nav>
           </div>
 
           <div className="flex items-center gap-3">
-            <div className="hidden md:block relative">
-              <Icon name="Search" size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Поиск игр..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 w-64 bg-muted border-border"
-              />
-            </div>
-
             <div className="bg-muted px-4 py-2 rounded-lg flex items-center gap-2">
               <Icon name="Wallet" size={18} className="text-primary" />
               <span className="font-semibold">{balance.toLocaleString()} ₽</span>
             </div>
 
             <Button size="sm" variant="default">
-              <Icon name="LogIn" size={16} className="mr-2" />
               Войти
             </Button>
             <Button size="sm" className="bg-secondary text-secondary-foreground hover:bg-secondary/90 hidden md:flex">
@@ -319,71 +255,50 @@ const Index = () => {
         </div>
       </header>
 
-      <div className="flex">
-        <aside className={`${sidebarOpen ? 'block' : 'hidden'} lg:block w-64 bg-card border-r border-border h-[calc(100vh-65px)] sticky top-[65px] overflow-y-auto`}>
-          <div className="p-4 space-y-1">
+      <div className="container mx-auto px-4 py-8">
+        <div className="mb-6">
+          <div className="flex items-center gap-2 mb-6">
             {categories.map((cat) => (
-              <button
+              <Button
                 key={cat.id}
                 onClick={() => setActiveCategory(cat.id)}
-                className={`w-full flex items-center justify-between px-4 py-3 rounded-lg transition-colors ${
-                  activeCategory === cat.id
-                    ? 'bg-primary text-primary-foreground'
-                    : 'hover:bg-muted text-foreground'
-                }`}
+                variant={activeCategory === cat.id ? 'default' : 'outline'}
+                size="sm"
               >
-                <div className="flex items-center gap-3">
-                  <Icon name={cat.icon as any} size={20} />
-                  <span className="font-medium">{cat.label}</span>
-                </div>
-                <span className="text-xs opacity-70">{cat.count}</span>
-              </button>
+                {cat.label}
+                <Badge variant="secondary" className="ml-2">{cat.count}</Badge>
+              </Button>
             ))}
           </div>
-        </aside>
+        </div>
 
-        <main className="flex-1 p-6">
-          <div className="mb-6">
-            <h1 className="text-3xl font-bold mb-2">
-              {categories.find(c => c.id === activeCategory)?.label || 'Игры'}
-            </h1>
-            <p className="text-muted-foreground">
-              {filteredGames.length} {filteredGames.length === 1 ? 'игра' : 'игр'} доступно
-            </p>
-          </div>
-
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4">
-            {filteredGames.map((game) => (
-              <Card
-                key={game.id}
-                onClick={() => openGame(game)}
-                className="group relative overflow-hidden cursor-pointer border-border hover:border-primary transition-all hover:scale-105"
-              >
-                {(game.hot || game.new) && (
-                  <Badge
-                    className={`absolute top-2 left-2 z-10 ${
-                      game.hot ? 'bg-destructive' : 'bg-secondary text-secondary-foreground'
-                    }`}
-                  >
-                    {game.hot ? '🔥 ХИТ' : '✨ NEW'}
-                  </Badge>
-                )}
-                
-                <div className="aspect-square bg-gradient-to-br from-muted to-background flex items-center justify-center text-6xl relative overflow-hidden">
-                  <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                  <span className="relative z-10">{getGameIcon(game)}</span>
-                </div>
-                
-                <div className="p-3">
-                  <h3 className="font-semibold text-sm mb-1 group-hover:text-primary transition-colors line-clamp-1">
-                    {game.title}
-                  </h3>
-                  <p className="text-xs text-muted-foreground line-clamp-1">{game.provider}</p>
-                </div>
-              </Card>
-            ))}
-          </div>
-        </main>
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
+          {filteredGames.map((game) => (
+            <Card
+              key={game.id}
+              onClick={() => openGame(game)}
+              className="group relative overflow-hidden cursor-pointer border-border hover:border-primary transition-all hover:scale-105"
+            >
+              {game.hot && (
+                <Badge className="absolute top-2 right-2 z-10 bg-destructive">
+                  🔥
+                </Badge>
+              )}
+              
+              <div className="aspect-square bg-gradient-to-br from-card to-muted flex items-center justify-center text-6xl relative overflow-hidden">
+                <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                <span className="relative z-10">{getGameIcon(game)}</span>
+              </div>
+              
+              <div className="p-3 bg-card">
+                <h3 className="font-semibold text-sm mb-1 group-hover:text-primary transition-colors">
+                  {game.title}
+                </h3>
+                <p className="text-xs text-muted-foreground">{game.provider}</p>
+              </div>
+            </Card>
+          ))}
+        </div>
       </div>
 
       <Dialog open={gameOpen} onOpenChange={setGameOpen}>
@@ -422,7 +337,7 @@ const Index = () => {
                   disabled={slotSpinning || !betAmount}
                   className="w-full bg-primary hover:bg-primary/90 font-bold text-lg h-12"
                 >
-                  {slotSpinning ? '🎰 Крутим...' : '🎰 SPIN'}
+                  {slotSpinning ? '🎰 Крутим...' : '🎰 ИГРАТЬ'}
                 </Button>
               </div>
 
@@ -437,13 +352,13 @@ const Index = () => {
             <div className="space-y-6">
               <div className="bg-gradient-to-br from-background to-muted p-8 rounded-xl border-2 border-border relative overflow-hidden">
                 <div className="text-center">
-                  <div className={`text-7xl font-bold mb-4 ${crashRunning ? 'text-primary' : ''}`}>
+                  <div className={`text-7xl font-bold mb-4 ${crashRunning ? 'text-primary animate-pulse' : 'text-foreground'}`}>
                     {crashMultiplier.toFixed(2)}x
                   </div>
                   {activeGame && <div className="text-6xl">{getGameIcon(activeGame)}</div>}
                 </div>
                 {crashRunning && (
-                  <div className="absolute inset-0 bg-gradient-to-t from-primary/20 to-transparent animate-pulse"></div>
+                  <div className="absolute inset-0 bg-gradient-to-t from-primary/20 to-transparent"></div>
                 )}
               </div>
 
@@ -470,7 +385,7 @@ const Index = () => {
                 {crashRunning && (
                   <Button 
                     onClick={cashOut}
-                    className="w-full bg-secondary text-secondary-foreground hover:bg-secondary/90 font-bold text-lg h-12 animate-pulse"
+                    className="w-full bg-secondary text-secondary-foreground hover:bg-secondary/90 font-bold text-lg h-12"
                   >
                     💰 ЗАБРАТЬ {(parseFloat(betAmount) * crashMultiplier).toFixed(2)} ₽
                   </Button>
@@ -484,7 +399,7 @@ const Index = () => {
             </div>
           )}
 
-          {(activeGame?.type === 'card' || activeGame?.type === 'roulette' || activeGame?.type === 'live') && (
+          {(activeGame?.type === 'mines' || activeGame?.type === 'plinko' || activeGame?.type === 'dice') && (
             <div className="text-center py-12">
               <div className="text-6xl mb-4">{activeGame && getGameIcon(activeGame)}</div>
               <p className="text-muted-foreground">Игра в разработке</p>
