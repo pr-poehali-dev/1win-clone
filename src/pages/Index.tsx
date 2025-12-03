@@ -2,6 +2,9 @@ import { useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { toast } from '@/components/ui/use-toast';
 import Icon from '@/components/ui/icon';
 
 interface LiveMatch {
@@ -22,10 +25,34 @@ interface GameCard {
   title: string;
   image: string;
   category: string;
+  type: 'slot' | 'crash' | 'card' | 'roulette';
+}
+
+interface Bet {
+  id: number;
+  match: string;
+  type: string;
+  odds: number;
+  amount: number;
+  timestamp: Date;
+  status: 'pending' | 'win' | 'lose';
 }
 
 const Index = () => {
+  const [balance, setBalance] = useState(10000);
   const [activeTab, setActiveTab] = useState('live');
+  const [betSlipOpen, setBetSlipOpen] = useState(false);
+  const [selectedBet, setSelectedBet] = useState<{ match: LiveMatch; type: string; odds: number } | null>(null);
+  const [betAmount, setBetAmount] = useState('');
+  const [bets, setBets] = useState<Bet[]>([]);
+  const [gameOpen, setGameOpen] = useState(false);
+  const [activeGame, setActiveGame] = useState<GameCard | null>(null);
+  const [slotSpinning, setSlotSpinning] = useState(false);
+  const [slotResult, setSlotResult] = useState(['🍒', '🍋', '🍊']);
+  const [crashMultiplier, setCrashMultiplier] = useState(1.00);
+  const [crashRunning, setCrashRunning] = useState(false);
+  const [crashBetAmount, setCrashBetAmount] = useState('');
+  const [crashCashedOut, setCrashCashedOut] = useState(false);
 
   const liveMatches: LiveMatch[] = [
     {
@@ -79,58 +106,233 @@ const Index = () => {
   ];
 
   const games: GameCard[] = [
-    { id: 1, title: 'Sweet Bonanza', image: '🍭', category: 'Слоты' },
-    { id: 2, title: 'Gates of Olympus', image: '⚡', category: 'Слоты' },
-    { id: 3, title: 'Aviator', image: '✈️', category: 'Краш' },
-    { id: 4, title: 'Lucky Jet', image: '🚀', category: 'Краш' },
-    { id: 5, title: 'Blackjack', image: '🃏', category: 'Карты' },
-    { id: 6, title: 'Roulette', image: '🎰', category: 'Рулетка' }
+    { id: 1, title: 'Sweet Bonanza', image: '🍭', category: 'Слоты', type: 'slot' },
+    { id: 2, title: 'Gates of Olympus', image: '⚡', category: 'Слоты', type: 'slot' },
+    { id: 3, title: 'Aviator', image: '✈️', category: 'Краш', type: 'crash' },
+    { id: 4, title: 'Lucky Jet', image: '🚀', category: 'Краш', type: 'crash' },
+    { id: 5, title: 'Blackjack', image: '🃏', category: 'Карты', type: 'card' },
+    { id: 6, title: 'Roulette', image: '🎰', category: 'Рулетка', type: 'roulette' }
   ];
 
-  const navItems = [
-    { icon: 'Home', label: 'Главная', active: true },
-    { icon: 'Gamepad2', label: 'Игры', active: false },
-    { icon: 'Trophy', label: 'Ставки', active: false },
-    { icon: 'User', label: 'Профиль', active: false },
-    { icon: 'Gift', label: 'Промоции', active: false },
-    { icon: 'Swords', label: 'Турниры', active: false },
-    { icon: 'HeadphonesIcon', label: 'Поддержка', active: false }
-  ];
+  const handleBetClick = (match: LiveMatch, type: string, odds: number) => {
+    setSelectedBet({ match, type, odds });
+    setBetSlipOpen(true);
+  };
+
+  const placeBet = () => {
+    if (!selectedBet || !betAmount) return;
+    
+    const amount = parseFloat(betAmount);
+    if (amount > balance) {
+      toast({ title: "Недостаточно средств", variant: "destructive" });
+      return;
+    }
+
+    setBalance(balance - amount);
+    
+    const newBet: Bet = {
+      id: Date.now(),
+      match: `${selectedBet.match.team1} vs ${selectedBet.match.team2}`,
+      type: selectedBet.type,
+      odds: selectedBet.odds,
+      amount,
+      timestamp: new Date(),
+      status: 'pending'
+    };
+
+    setBets([newBet, ...bets]);
+    
+    setTimeout(() => {
+      const isWin = Math.random() > 0.5;
+      setBets(prev => prev.map(bet => 
+        bet.id === newBet.id 
+          ? { ...bet, status: isWin ? 'win' : 'lose' }
+          : bet
+      ));
+      
+      if (isWin) {
+        const winAmount = amount * selectedBet.odds;
+        setBalance(prev => prev + winAmount);
+        toast({ 
+          title: "Выигрыш!", 
+          description: `Вы выиграли ${winAmount.toFixed(2)} ₽` 
+        });
+      } else {
+        toast({ 
+          title: "Проигрыш", 
+          description: "В следующий раз повезёт!",
+          variant: "destructive"
+        });
+      }
+    }, 5000);
+
+    setBetSlipOpen(false);
+    setBetAmount('');
+    toast({ title: "Ставка принята!" });
+  };
+
+  const openGame = (game: GameCard) => {
+    setActiveGame(game);
+    setGameOpen(true);
+    if (game.type === 'slot') {
+      setSlotResult(['🍒', '🍋', '🍊']);
+    } else if (game.type === 'crash') {
+      setCrashMultiplier(1.00);
+      setCrashRunning(false);
+      setCrashCashedOut(false);
+    }
+  };
+
+  const spinSlot = () => {
+    if (!betAmount || slotSpinning) return;
+    
+    const amount = parseFloat(betAmount);
+    if (amount > balance) {
+      toast({ title: "Недостаточно средств", variant: "destructive" });
+      return;
+    }
+
+    setBalance(balance - amount);
+    setSlotSpinning(true);
+
+    const symbols = ['🍒', '🍋', '🍊', '🍇', '⭐', '💎', '7️⃣'];
+    let spins = 0;
+    const interval = setInterval(() => {
+      setSlotResult([
+        symbols[Math.floor(Math.random() * symbols.length)],
+        symbols[Math.floor(Math.random() * symbols.length)],
+        symbols[Math.floor(Math.random() * symbols.length)]
+      ]);
+      spins++;
+      
+      if (spins >= 20) {
+        clearInterval(interval);
+        const finalResult = [
+          symbols[Math.floor(Math.random() * symbols.length)],
+          symbols[Math.floor(Math.random() * symbols.length)],
+          symbols[Math.floor(Math.random() * symbols.length)]
+        ];
+        setSlotResult(finalResult);
+        setSlotSpinning(false);
+
+        if (finalResult[0] === finalResult[1] && finalResult[1] === finalResult[2]) {
+          const winAmount = amount * 10;
+          setBalance(prev => prev + winAmount);
+          toast({ 
+            title: "🎉 ДЖЕКПОТ!", 
+            description: `Выигрыш: ${winAmount} ₽` 
+          });
+        } else if (finalResult[0] === finalResult[1] || finalResult[1] === finalResult[2]) {
+          const winAmount = amount * 3;
+          setBalance(prev => prev + winAmount);
+          toast({ 
+            title: "Выигрыш!", 
+            description: `+${winAmount} ₽` 
+          });
+        } else {
+          toast({ 
+            title: "Почти получилось!", 
+            variant: "destructive" 
+          });
+        }
+        setBetAmount('');
+      }
+    }, 100);
+  };
+
+  const startCrash = () => {
+    if (!crashBetAmount || crashRunning) return;
+    
+    const amount = parseFloat(crashBetAmount);
+    if (amount > balance) {
+      toast({ title: "Недостаточно средств", variant: "destructive" });
+      return;
+    }
+
+    setBalance(balance - amount);
+    setCrashRunning(true);
+    setCrashCashedOut(false);
+    setCrashMultiplier(1.00);
+
+    const crashPoint = 1 + Math.random() * 9;
+    const interval = setInterval(() => {
+      setCrashMultiplier(prev => {
+        const next = prev + 0.01;
+        if (next >= crashPoint) {
+          clearInterval(interval);
+          setCrashRunning(false);
+          if (!crashCashedOut) {
+            toast({ 
+              title: "💥 КРАХ!", 
+              description: `Множитель достиг ${crashPoint.toFixed(2)}x`,
+              variant: "destructive" 
+            });
+          }
+          return crashPoint;
+        }
+        return next;
+      });
+    }, 50);
+  };
+
+  const cashOut = () => {
+    if (!crashRunning || crashCashedOut) return;
+    
+    setCrashCashedOut(true);
+    setCrashRunning(false);
+    
+    const amount = parseFloat(crashBetAmount);
+    const winAmount = amount * crashMultiplier;
+    setBalance(prev => prev + winAmount);
+    
+    toast({ 
+      title: "✅ Вывод успешен!", 
+      description: `Выигрыш: ${winAmount.toFixed(2)} ₽ (${crashMultiplier.toFixed(2)}x)` 
+    });
+    setCrashBetAmount('');
+  };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted">
-      <nav className="sticky top-0 z-50 bg-card/95 backdrop-blur-lg border-b border-border/50">
-        <div className="container mx-auto px-4 py-4">
+    <div className="min-h-screen bg-[#0f212e]">
+      <nav className="sticky top-0 z-50 bg-[#1a2c38] border-b border-[#2f4553]">
+        <div className="container mx-auto px-4 py-3">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="text-3xl font-bold bg-gradient-to-r from-primary via-secondary to-accent bg-clip-text text-transparent">
-                1WIN
-              </div>
-              <Badge variant="secondary" className="animate-pulse-glow">
-                LIVE
-              </Badge>
-            </div>
-            
-            <div className="hidden md:flex items-center gap-2">
-              {navItems.map((item) => (
-                <Button
-                  key={item.label}
-                  variant={item.active ? 'default' : 'ghost'}
-                  className="gap-2 transition-all hover:scale-105"
-                >
-                  <Icon name={item.icon as any} size={18} />
-                  {item.label}
+            <div className="flex items-center gap-6">
+              <div className="text-2xl font-bold text-[#00e701]">1WIN</div>
+              
+              <div className="hidden lg:flex items-center gap-1">
+                <Button variant="ghost" size="sm" className="text-white hover:bg-[#2f4553] gap-2">
+                  <Icon name="Home" size={16} />
+                  Главная
                 </Button>
-              ))}
+                <Button variant="ghost" size="sm" className="text-gray-400 hover:bg-[#2f4553] gap-2">
+                  <Icon name="Trophy" size={16} />
+                  Спорт
+                </Button>
+                <Button variant="ghost" size="sm" className="text-gray-400 hover:bg-[#2f4553] gap-2">
+                  <Icon name="Radio" size={16} />
+                  Live
+                </Button>
+                <Button variant="ghost" size="sm" className="text-gray-400 hover:bg-[#2f4553] gap-2">
+                  <Icon name="Gamepad2" size={16} />
+                  Казино
+                </Button>
+                <Button variant="ghost" size="sm" className="text-gray-400 hover:bg-[#2f4553] gap-2">
+                  <Icon name="Zap" size={16} />
+                  Слоты
+                </Button>
+              </div>
             </div>
 
             <div className="flex items-center gap-3">
-              <Button variant="outline" className="gap-2">
-                <Icon name="LogIn" size={18} />
-                Вход
+              <div className="bg-[#2f4553] px-4 py-2 rounded-lg flex items-center gap-2">
+                <Icon name="Wallet" size={18} className="text-[#00e701]" />
+                <span className="text-white font-semibold">{balance.toFixed(2)} ₽</span>
+              </div>
+              <Button size="sm" className="bg-[#00e701] text-black hover:bg-[#00c501] font-semibold">
+                Войти
               </Button>
-              <Button className="gap-2 bg-gradient-to-r from-primary to-secondary hover:opacity-90">
-                <Icon name="UserPlus" size={18} />
+              <Button size="sm" className="bg-[#ff6b00] text-white hover:bg-[#ff5500] font-semibold">
                 Регистрация
               </Button>
             </div>
@@ -138,223 +340,328 @@ const Index = () => {
         </div>
       </nav>
 
-      <div className="container mx-auto px-4 py-8 space-y-8">
-        <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-primary/20 via-secondary/20 to-accent/20 p-8 md:p-12 border border-primary/30 animate-fade-in">
-          <div className="relative z-10 max-w-2xl">
-            <h1 className="text-4xl md:text-6xl font-bold mb-4 bg-gradient-to-r from-white via-primary to-secondary bg-clip-text text-transparent">
-              Ставки на спорт онлайн
-            </h1>
-            <p className="text-lg md:text-xl text-foreground/80 mb-6">
-              Лучшие коэффициенты на футбол, хоккей, баскетбол и другие виды спорта
-            </p>
-            <div className="flex gap-3">
-              <Button size="lg" className="gap-2 bg-gradient-to-r from-accent to-secondary hover:opacity-90 text-lg px-8">
-                <Icon name="Zap" size={20} />
-                Начать играть
-              </Button>
-              <Button size="lg" variant="outline" className="gap-2 text-lg px-8">
-                <Icon name="Play" size={20} />
-                Демо режим
-              </Button>
+      <div className="container mx-auto px-4 py-6">
+        <div className="grid lg:grid-cols-3 gap-4 mb-6">
+          <Card className="col-span-2 bg-gradient-to-r from-[#ff6b00] to-[#ff8c00] border-0 p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-3xl font-bold text-white mb-2">Приветственный бонус</h2>
+                <p className="text-white/90 text-lg mb-4">+500% к первому депозиту</p>
+                <Button className="bg-white text-[#ff6b00] hover:bg-gray-100 font-bold">
+                  Получить бонус
+                </Button>
+              </div>
+              <div className="text-6xl">🎁</div>
             </div>
-          </div>
-          <div className="absolute top-0 right-0 w-96 h-96 bg-gradient-to-br from-primary/30 to-transparent rounded-full blur-3xl"></div>
-          <div className="absolute bottom-0 left-0 w-64 h-64 bg-gradient-to-tr from-secondary/30 to-transparent rounded-full blur-3xl"></div>
-        </section>
+          </Card>
 
-        <section>
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-3xl font-bold flex items-center gap-3">
-              <Icon name="Radio" size={32} className="text-accent animate-pulse" />
-              Live Ставки
+          <Card className="bg-[#1a2c38] border-[#2f4553] p-4">
+            <h3 className="text-white font-semibold mb-3 flex items-center gap-2">
+              <Icon name="Clock" size={18} className="text-[#00e701]" />
+              Мои ставки
+            </h3>
+            <div className="space-y-2 max-h-32 overflow-y-auto">
+              {bets.slice(0, 3).map(bet => (
+                <div key={bet.id} className="bg-[#0f212e] p-2 rounded text-xs">
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-400">{bet.match}</span>
+                    <Badge 
+                      variant={bet.status === 'win' ? 'default' : bet.status === 'lose' ? 'destructive' : 'secondary'}
+                      className="text-xs"
+                    >
+                      {bet.status === 'win' ? '✓' : bet.status === 'lose' ? '✗' : '●'}
+                    </Badge>
+                  </div>
+                  <div className="text-white font-semibold">{bet.amount} ₽ × {bet.odds}</div>
+                </div>
+              ))}
+              {bets.length === 0 && (
+                <p className="text-gray-500 text-sm">Нет активных ставок</p>
+              )}
+            </div>
+          </Card>
+        </div>
+
+        <div className="mb-6">
+          <div className="flex items-center gap-4 mb-4">
+            <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+              <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+              Live события
             </h2>
-            <div className="flex gap-2">
-              <Button variant={activeTab === 'live' ? 'default' : 'outline'} onClick={() => setActiveTab('live')}>
-                <Icon name="Tv" size={18} className="mr-2" />
-                В эфире
-              </Button>
-              <Button variant={activeTab === 'upcoming' ? 'default' : 'outline'} onClick={() => setActiveTab('upcoming')}>
-                <Icon name="Clock" size={18} className="mr-2" />
-                Скоро
-              </Button>
-            </div>
+            <Button 
+              variant={activeTab === 'live' ? 'default' : 'outline'} 
+              size="sm"
+              onClick={() => setActiveTab('live')}
+              className={activeTab === 'live' ? 'bg-[#00e701] text-black' : 'text-gray-400 border-[#2f4553]'}
+            >
+              В эфире
+            </Button>
+            <Button 
+              variant={activeTab === 'upcoming' ? 'default' : 'outline'} 
+              size="sm"
+              onClick={() => setActiveTab('upcoming')}
+              className={activeTab === 'upcoming' ? 'bg-[#00e701] text-black' : 'text-gray-400 border-[#2f4553]'}
+            >
+              Скоро
+            </Button>
           </div>
 
-          <div className="grid gap-4">
-            {liveMatches.map((match, index) => (
-              <Card 
-                key={match.id} 
-                className="p-6 bg-card/50 backdrop-blur-sm border-border/50 hover:border-primary/50 transition-all hover:scale-[1.01] animate-fade-in"
-                style={{ animationDelay: `${index * 0.1}s` }}
-              >
+          <div className="space-y-3">
+            {liveMatches.map((match) => (
+              <Card key={match.id} className="bg-[#1a2c38] border-[#2f4553] p-4 hover:border-[#00e701] transition-colors">
                 <div className="flex items-center justify-between">
                   <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-3">
-                      <Badge variant="destructive" className="animate-pulse">
-                        <Icon name="Circle" size={8} className="mr-1 fill-current" />
+                    <div className="flex items-center gap-3 mb-2">
+                      <Badge className="bg-red-500 text-white text-xs">
+                        <div className="w-1.5 h-1.5 bg-white rounded-full mr-1 animate-pulse"></div>
                         LIVE
                       </Badge>
-                      <span className="text-sm text-muted-foreground">{match.sport}</span>
-                      <span className="text-sm font-semibold text-accent">{match.time}</span>
+                      <span className="text-gray-400 text-sm">{match.sport}</span>
+                      <span className="text-[#ff6b00] text-sm font-semibold">{match.time}</span>
                     </div>
                     
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-lg font-semibold">{match.team1}</span>
-                        <span className="text-2xl font-bold text-primary">{match.score.split(':')[0]}</span>
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between text-white">
+                        <span className="font-semibold">{match.team1}</span>
+                        <span className="text-2xl font-bold text-[#00e701]">{match.score.split(':')[0]}</span>
                       </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-lg font-semibold">{match.team2}</span>
-                        <span className="text-2xl font-bold text-secondary">{match.score.split(':')[1]}</span>
+                      <div className="flex items-center justify-between text-white">
+                        <span className="font-semibold">{match.team2}</span>
+                        <span className="text-2xl font-bold text-[#ff6b00]">{match.score.split(':')[1]}</span>
                       </div>
                     </div>
                   </div>
 
                   <div className="flex gap-2 ml-6">
-                    <Button 
-                      className="flex flex-col h-20 w-24 bg-muted hover:bg-primary/20 transition-all hover:scale-105 animate-pulse-glow"
-                      variant="outline"
+                    <button
+                      onClick={() => handleBetClick(match, 'П1', match.odds1)}
+                      className="flex flex-col items-center justify-center w-20 h-16 bg-[#0f212e] hover:bg-[#00e701]/20 border-2 border-transparent hover:border-[#00e701] rounded transition-all"
                     >
-                      <span className="text-xs text-muted-foreground mb-1">П1</span>
-                      <span className="text-2xl font-bold text-primary">{match.odds1}</span>
-                    </Button>
+                      <span className="text-gray-400 text-xs mb-1">П1</span>
+                      <span className="text-white text-xl font-bold">{match.odds1}</span>
+                    </button>
                     
                     {match.oddsX > 0 && (
-                      <Button 
-                        className="flex flex-col h-20 w-24 bg-muted hover:bg-accent/20 transition-all hover:scale-105 animate-pulse-glow"
-                        variant="outline"
-                        style={{ animationDelay: '0.2s' }}
+                      <button
+                        onClick={() => handleBetClick(match, 'X', match.oddsX)}
+                        className="flex flex-col items-center justify-center w-20 h-16 bg-[#0f212e] hover:bg-[#00e701]/20 border-2 border-transparent hover:border-[#00e701] rounded transition-all"
                       >
-                        <span className="text-xs text-muted-foreground mb-1">X</span>
-                        <span className="text-2xl font-bold text-accent">{match.oddsX}</span>
-                      </Button>
+                        <span className="text-gray-400 text-xs mb-1">X</span>
+                        <span className="text-white text-xl font-bold">{match.oddsX}</span>
+                      </button>
                     )}
                     
-                    <Button 
-                      className="flex flex-col h-20 w-24 bg-muted hover:bg-secondary/20 transition-all hover:scale-105 animate-pulse-glow"
-                      variant="outline"
-                      style={{ animationDelay: '0.4s' }}
+                    <button
+                      onClick={() => handleBetClick(match, 'П2', match.odds2)}
+                      className="flex flex-col items-center justify-center w-20 h-16 bg-[#0f212e] hover:bg-[#00e701]/20 border-2 border-transparent hover:border-[#00e701] rounded transition-all"
                     >
-                      <span className="text-xs text-muted-foreground mb-1">П2</span>
-                      <span className="text-2xl font-bold text-secondary">{match.odds2}</span>
-                    </Button>
+                      <span className="text-gray-400 text-xs mb-1">П2</span>
+                      <span className="text-white text-xl font-bold">{match.odds2}</span>
+                    </button>
                   </div>
                 </div>
               </Card>
             ))}
           </div>
-        </section>
+        </div>
 
-        <section>
-          <h2 className="text-3xl font-bold mb-6 flex items-center gap-3">
-            <Icon name="Sparkles" size={32} className="text-secondary" />
+        <div>
+          <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-2">
+            <Icon name="Sparkles" size={24} className="text-[#ff6b00]" />
             Популярные игры
           </h2>
           
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-            {games.map((game, index) => (
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+            {games.map((game) => (
               <Card 
                 key={game.id}
-                className="group relative overflow-hidden cursor-pointer transition-all hover:scale-105 hover:border-primary animate-fade-in"
-                style={{ animationDelay: `${index * 0.05}s` }}
+                onClick={() => openGame(game)}
+                className="group bg-[#1a2c38] border-[#2f4553] cursor-pointer hover:border-[#00e701] transition-all hover:scale-105 overflow-hidden"
               >
-                <div className="aspect-square bg-gradient-to-br from-muted to-background flex items-center justify-center text-6xl">
+                <div className="aspect-square bg-gradient-to-br from-[#2f4553] to-[#0f212e] flex items-center justify-center text-6xl">
                   {game.image}
                 </div>
-                <div className="p-4">
-                  <Badge variant="secondary" className="mb-2 text-xs">
+                <div className="p-3">
+                  <Badge className="bg-[#00e701] text-black text-xs mb-2">
                     {game.category}
                   </Badge>
-                  <h3 className="font-semibold group-hover:text-primary transition-colors">
+                  <h3 className="text-white font-semibold text-sm group-hover:text-[#00e701] transition-colors">
                     {game.title}
                   </h3>
                 </div>
-                <div className="absolute inset-0 bg-gradient-to-t from-primary/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
               </Card>
             ))}
           </div>
-        </section>
-
-        <section className="bg-gradient-to-r from-primary/10 via-secondary/10 to-accent/10 rounded-3xl p-8 border border-primary/20">
-          <div className="grid md:grid-cols-3 gap-8">
-            <div className="text-center">
-              <div className="w-16 h-16 bg-primary/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Icon name="Gift" size={32} className="text-primary" />
-              </div>
-              <h3 className="text-xl font-bold mb-2">Бонус 500%</h3>
-              <p className="text-muted-foreground">На первый депозит до 100 000 ₽</p>
-            </div>
-            
-            <div className="text-center">
-              <div className="w-16 h-16 bg-secondary/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Icon name="Zap" size={32} className="text-secondary" />
-              </div>
-              <h3 className="text-xl font-bold mb-2">Быстрый вывод</h3>
-              <p className="text-muted-foreground">Моментальные выплаты 24/7</p>
-            </div>
-            
-            <div className="text-center">
-              <div className="w-16 h-16 bg-accent/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Icon name="Shield" size={32} className="text-accent" />
-              </div>
-              <h3 className="text-xl font-bold mb-2">Безопасность</h3>
-              <p className="text-muted-foreground">Лицензия и защита данных</p>
-            </div>
-          </div>
-        </section>
+        </div>
       </div>
 
-      <footer className="bg-card/50 backdrop-blur-sm border-t border-border/50 mt-16 py-8">
-        <div className="container mx-auto px-4">
-          <div className="grid md:grid-cols-4 gap-8">
-            <div>
-              <h4 className="font-bold text-lg mb-4 text-primary">О компании</h4>
-              <ul className="space-y-2 text-muted-foreground">
-                <li className="hover:text-foreground cursor-pointer transition-colors">О нас</li>
-                <li className="hover:text-foreground cursor-pointer transition-colors">Лицензия</li>
-                <li className="hover:text-foreground cursor-pointer transition-colors">Партнерство</li>
-              </ul>
+      <Dialog open={betSlipOpen} onOpenChange={setBetSlipOpen}>
+        <DialogContent className="bg-[#1a2c38] border-[#2f4553] text-white">
+          <DialogHeader>
+            <DialogTitle className="text-white">Купон ставки</DialogTitle>
+          </DialogHeader>
+          {selectedBet && (
+            <div className="space-y-4">
+              <div className="bg-[#0f212e] p-4 rounded-lg">
+                <p className="text-gray-400 text-sm">{selectedBet.match.sport}</p>
+                <p className="text-white font-semibold">{selectedBet.match.team1} vs {selectedBet.match.team2}</p>
+                <div className="flex justify-between items-center mt-2">
+                  <span className="text-gray-400">{selectedBet.type}</span>
+                  <span className="text-[#00e701] text-xl font-bold">{selectedBet.odds}</span>
+                </div>
+              </div>
+              
+              <div>
+                <label className="text-gray-400 text-sm mb-2 block">Сумма ставки</label>
+                <Input
+                  type="number"
+                  placeholder="Введите сумму"
+                  value={betAmount}
+                  onChange={(e) => setBetAmount(e.target.value)}
+                  className="bg-[#0f212e] border-[#2f4553] text-white"
+                />
+                <div className="flex gap-2 mt-2">
+                  {[100, 500, 1000, 5000].map(amount => (
+                    <Button
+                      key={amount}
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setBetAmount(amount.toString())}
+                      className="text-white border-[#2f4553] hover:bg-[#2f4553]"
+                    >
+                      {amount}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+
+              {betAmount && (
+                <div className="bg-[#0f212e] p-4 rounded-lg">
+                  <div className="flex justify-between text-sm mb-1">
+                    <span className="text-gray-400">Возможный выигрыш:</span>
+                    <span className="text-[#00e701] font-bold">
+                      {(parseFloat(betAmount) * selectedBet.odds).toFixed(2)} ₽
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              <Button 
+                onClick={placeBet}
+                className="w-full bg-[#00e701] text-black hover:bg-[#00c501] font-bold"
+                disabled={!betAmount || parseFloat(betAmount) > balance}
+              >
+                Сделать ставку
+              </Button>
             </div>
-            
-            <div>
-              <h4 className="font-bold text-lg mb-4 text-secondary">Помощь</h4>
-              <ul className="space-y-2 text-muted-foreground">
-                <li className="hover:text-foreground cursor-pointer transition-colors">FAQ</li>
-                <li className="hover:text-foreground cursor-pointer transition-colors">Служба поддержки</li>
-                <li className="hover:text-foreground cursor-pointer transition-colors">Правила</li>
-              </ul>
-            </div>
-            
-            <div>
-              <h4 className="font-bold text-lg mb-4 text-accent">Ставки</h4>
-              <ul className="space-y-2 text-muted-foreground">
-                <li className="hover:text-foreground cursor-pointer transition-colors">Live ставки</li>
-                <li className="hover:text-foreground cursor-pointer transition-colors">Линия</li>
-                <li className="hover:text-foreground cursor-pointer transition-colors">Киберспорт</li>
-              </ul>
-            </div>
-            
-            <div>
-              <h4 className="font-bold text-lg mb-4">Социальные сети</h4>
-              <div className="flex gap-3">
-                <Button size="icon" variant="outline" className="hover:bg-primary hover:text-primary-foreground">
-                  <Icon name="MessageCircle" size={20} />
-                </Button>
-                <Button size="icon" variant="outline" className="hover:bg-secondary hover:text-secondary-foreground">
-                  <Icon name="Send" size={20} />
-                </Button>
-                <Button size="icon" variant="outline" className="hover:bg-accent hover:text-accent-foreground">
-                  <Icon name="AtSign" size={20} />
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={gameOpen} onOpenChange={setGameOpen}>
+        <DialogContent className="bg-[#1a2c38] border-[#2f4553] text-white max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-white text-2xl">{activeGame?.title}</DialogTitle>
+          </DialogHeader>
+          
+          {activeGame?.type === 'slot' && (
+            <div className="space-y-6">
+              <div className="bg-gradient-to-br from-[#ff6b00] to-[#ff8c00] p-8 rounded-xl">
+                <div className="flex justify-center gap-4 mb-6">
+                  {slotResult.map((symbol, i) => (
+                    <div key={i} className="bg-white w-24 h-24 rounded-lg flex items-center justify-center text-5xl shadow-2xl">
+                      {symbol}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <Input
+                  type="number"
+                  placeholder="Сумма ставки"
+                  value={betAmount}
+                  onChange={(e) => setBetAmount(e.target.value)}
+                  className="bg-[#0f212e] border-[#2f4553] text-white"
+                  disabled={slotSpinning}
+                />
+                
+                <Button 
+                  onClick={spinSlot}
+                  disabled={slotSpinning || !betAmount}
+                  className="w-full bg-[#00e701] text-black hover:bg-[#00c501] font-bold text-lg h-12"
+                >
+                  {slotSpinning ? '🎰 Крутим...' : '🎰 SPIN'}
                 </Button>
               </div>
+
+              <div className="bg-[#0f212e] p-4 rounded-lg text-sm text-gray-400">
+                <p>🎯 3 одинаковых символа = ×10</p>
+                <p>🎯 2 одинаковых символа = ×3</p>
+              </div>
             </div>
-          </div>
-          
-          <div className="mt-8 pt-8 border-t border-border/50 text-center text-muted-foreground text-sm">
-            <p>© 2024 1WIN. Все права защищены. 18+</p>
-          </div>
-        </div>
-      </footer>
+          )}
+
+          {activeGame?.type === 'crash' && (
+            <div className="space-y-6">
+              <div className="bg-gradient-to-br from-[#0f212e] to-[#1a2c38] p-8 rounded-xl border-2 border-[#2f4553] relative overflow-hidden">
+                <div className="text-center">
+                  <div className={`text-7xl font-bold mb-4 ${crashRunning ? 'text-[#00e701]' : 'text-white'}`}>
+                    {crashMultiplier.toFixed(2)}x
+                  </div>
+                  {activeGame.image && <div className="text-6xl">{activeGame.image}</div>}
+                </div>
+                {crashRunning && (
+                  <div className="absolute inset-0 bg-gradient-to-t from-[#00e701]/20 to-transparent animate-pulse"></div>
+                )}
+              </div>
+
+              <div className="space-y-4">
+                <Input
+                  type="number"
+                  placeholder="Сумма ставки"
+                  value={crashBetAmount}
+                  onChange={(e) => setCrashBetAmount(e.target.value)}
+                  className="bg-[#0f212e] border-[#2f4553] text-white"
+                  disabled={crashRunning}
+                />
+                
+                {!crashRunning && !crashCashedOut && (
+                  <Button 
+                    onClick={startCrash}
+                    disabled={!crashBetAmount}
+                    className="w-full bg-[#00e701] text-black hover:bg-[#00c501] font-bold text-lg h-12"
+                  >
+                    🚀 СТАРТ
+                  </Button>
+                )}
+
+                {crashRunning && (
+                  <Button 
+                    onClick={cashOut}
+                    className="w-full bg-[#ff6b00] text-white hover:bg-[#ff5500] font-bold text-lg h-12 animate-pulse"
+                  >
+                    💰 ЗАБРАТЬ {(parseFloat(crashBetAmount) * crashMultiplier).toFixed(2)} ₽
+                  </Button>
+                )}
+              </div>
+
+              <div className="bg-[#0f212e] p-4 rounded-lg text-sm text-gray-400">
+                <p>🎯 Нажмите ЗАБРАТЬ до того как произойдет крах!</p>
+                <p>🎯 Чем выше множитель, тем больше выигрыш</p>
+              </div>
+            </div>
+          )}
+
+          {(activeGame?.type === 'card' || activeGame?.type === 'roulette') && (
+            <div className="text-center py-12">
+              <div className="text-6xl mb-4">{activeGame.image}</div>
+              <p className="text-gray-400">Игра в разработке</p>
+              <p className="text-sm text-gray-500 mt-2">Скоро появится!</p>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
